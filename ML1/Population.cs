@@ -10,12 +10,9 @@ namespace ML1
     {
         public bool[][] Individuals { get; protected set; }
         int itemCount;
-        public int CrossoverRate { get; set; }
-        protected Func<int, Task, int> evaluatingMethod;
-        double mutationRate;
-        int mutationCount;
-        public int BaseRouletteChance = 1;
-        public int TournamentSize = 1;
+        public double CrossoverRate { get; set; } = 0.9;
+
+        double mutationRate = 0.005;
         public double MutationRate
         {
             get
@@ -29,16 +26,51 @@ namespace ML1
             }
         }
 
+        int mutationCount;
 
-        public Population(int itemCount, int populationSize)
+
+
+        public int BaseRouletteChance = 1;
+        public int TournamentSize = 32;
+        protected Task task;
+        public Task Task
         {
-            this.itemCount = itemCount;
+            get
+            {
+                return task;
+            }
+            set
+            {
+                task = value ?? throw new NullReferenceException();
+                itemCount = task.ItemCount;
+            }
+        }
+
+
+        public string Description
+        {
+            get
+            {
+                return $"Population:" +
+                    $"\n          Individuals: {$"{Individuals.Length}".PadLeft(6)}" +
+                    $"\n Base roulette chance: {$"{BaseRouletteChance}".PadLeft(6)}" +
+                    $"\n      Tournament size: {$"{TournamentSize}".PadLeft(6)}" +
+                    $"\n        Mutation rate: {$"{MutationRate}".PadLeft(6)}" +
+                    $"\n       Crossover rate: {$"{CrossoverRate}".PadLeft(6)}";
+            }
+        }
+
+        protected Random rng;
+
+        public Population(Task task, int populationSize, int seed)
+        {
+            Task = task;
+            rng = new Random(seed);
             Individuals = new bool[populationSize][];
             for (int i = populationSize - 1; i >= 0; i--)
             {
                 Individuals[i] = GetRandomIndividual(itemCount);
             }
-            evaluatingMethod = Evaluate1;
         }
 
         bool[] GetRandomIndividual(int itemCount)
@@ -47,13 +79,13 @@ namespace ML1
 
             for (int i = itemCount - 1; i >= 0; i--)
             {
-                arr[i] = Misc.rng.Next(2) == 0;
+                arr[i] = rng.Next(6) == 0;
             }
 
             return arr;
         }
 
-        protected (int, int) GetSizeAndWeight(int individualID, Task task)
+        protected (int, int) GetSizeAndWeight(int individualID)
         {
             if (task == null)
                 throw new ArgumentNullException("Task");
@@ -77,12 +109,9 @@ namespace ML1
             return (totalSize, totalWeight);
         }
 
-        /// <summary>
-        /// From the task.
-        /// </summary>
-        public int Evaluate1(int individualID, Task task)
+        public int Evaluate(int individualID)
         {
-            (int, int) data = GetSizeAndWeight(individualID, task);
+            (int, int) data = GetSizeAndWeight(individualID);
 
             if (data.Item1 > task.MaxSize || data.Item2 > task.MaxWeight)
                 return 0;
@@ -90,14 +119,9 @@ namespace ML1
             return data.Item1 + data.Item2;
         }
 
-        /// <summary>
-        /// My proposition.
-        /// </summary>
-        public int Evaluate2(int individualID, Task task)
+        public int EvaluateBest()
         {
-            (int, int) data = GetSizeAndWeight(individualID, task);
-
-            return Math.Abs(data.Item1 - task.MaxSize) + Math.Abs(data.Item2 - task.MaxWeight);
+            return Evaluate(BestID());
         }
 
         public bool[] Crossover(int parent1, int parent2)
@@ -125,7 +149,7 @@ namespace ML1
             {
                 crossoverPoint = Misc.rng.Next(1, itemCount);
             }
-
+           
             bool[] parent = Individuals[parent1];
             for (int i = 0; i < crossoverPoint && i < itemCount; i++)
             {
@@ -137,7 +161,6 @@ namespace ML1
             {
                 child[i] = parent[i];
             }
-
             return child;
         }
 
@@ -171,15 +194,15 @@ namespace ML1
             return individual;
         }
 
-        protected int SingleTournament(int size, Task task)
+        protected int SingleTournament()
         {
-            int[] contestants = Misc.GetRandomUniqueIntegers(size, Individuals.Length);
+            int[] contestants = Misc.GetRandomUniqueIntegers(TournamentSize, Individuals.Length);
             int bestFitness = 0;
             int bestId = 0;
             int tempFitness;
-            for(int i = size - 1; i >= 0; i--)
+            for(int i = TournamentSize - 1; i >= 0; i--)
             {
-                if((tempFitness = evaluatingMethod.Invoke(contestants[i], task)) > bestFitness)
+                if((tempFitness = Evaluate(contestants[i])) > bestFitness)
                 {
                     bestFitness = tempFitness;
                     bestId = contestants[i];
@@ -188,21 +211,24 @@ namespace ML1
             return bestId;
         }
 
-        public void Tournament(Task task)
+        public void Tournament()
         {
-
+            bool[][] newPopulation = new bool[Individuals.Length][];
+            for (int i = Individuals.Length - 1; i >= 0; i--)
+            {
+                newPopulation[i] = Mutate(Crossover(SingleTournament(), SingleTournament()));
+            }
         }
 
-        public void Roulette(Task task)
+        public void Roulette()
         {
             int[] fitnesses = new int[Individuals.Length];
-            fitnesses[Individuals.Length - 1] = evaluatingMethod.Invoke(Individuals.Length - 1, task);
+            fitnesses[Individuals.Length - 1] = Evaluate(Individuals.Length - 1);
             
             for (int i = Individuals.Length - 2; i >= 0; i--)
             {
-                fitnesses[i] = fitnesses[i+ 1] + evaluatingMethod.Invoke(i, task) + BaseRouletteChance;
+                fitnesses[i] = fitnesses[i+ 1] + Evaluate(i) / 1000 + BaseRouletteChance;
             }
-
             int parent1;
             int parent2;
             int parent1Point;
@@ -212,22 +238,59 @@ namespace ML1
 
             for (int i = Individuals.Length - 1; i >= 0; i--)
             {
-                parent1 = 0;
-                parent2 = 0;
-                parent1Point = Misc.rng.Next(Individuals.Length);
-
-                while((parent2Point = Misc.rng.Next(Individuals.Length)) == parent1Point) { }
+                parent1 = -1;
+                parent2 = -1;
+                parent1Point = Misc.rng.Next(fitnesses[0]);
+                
+                while ((parent2Point = Misc.rng.Next(fitnesses[0])) == parent1Point) { }
 
                 for(int j = Individuals.Length - 1; j >= 0 && (parent1 < 0 || parent2 < 0); j--)
                 {
-                    if (parent1Point < fitnesses[j])
+                    if (parent1 < 0 && parent1Point < fitnesses[j])
                         parent1 = j;
-                    if (parent2Point < fitnesses[j])
+                    if (parent2 < 0 && parent2Point < fitnesses[j])
                         parent2 = j;
                 }
+                
                 newPopulation[i] = Mutate(Crossover(parent1, parent2));
             }
+            Individuals = newPopulation;
+            
+        }
 
+        public void Show(int id)
+        {
+            for (int i = 0; i < itemCount; i++)
+                Console.Write((Individuals[id][i] ? '#' : '.'));
+            Console.WriteLine();
+        }
+
+        public void Show(bool[] indv)
+        {
+            for (int i = 0; i < indv.Length; i++)
+                Console.Write((indv[i] ? '#' : '.'));
+            Console.WriteLine();
+        }
+
+        public bool[] Best()
+        {
+            return (bool[])Individuals[BestID()].Clone();
+        }
+
+        public int BestID()
+        {
+            int bestFitness = 0;
+            int bestId = 0;
+            int tempFitness;
+            for (int i = Individuals.Length - 1; i >= 0; i--)
+            {
+                if ((tempFitness = Evaluate(i)) > bestFitness)
+                {
+                    bestFitness = tempFitness;
+                    bestId = i;
+                }
+            }
+            return bestId;
         }
 
     }

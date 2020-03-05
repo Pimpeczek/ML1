@@ -23,6 +23,16 @@ namespace ML1
         public int MaxSize { get; protected set; }
         public int MaxWeight { get; protected set; }
 
+        public string Description
+        {
+            get
+            {
+                return $"Task:" +
+                    $"\n Item count: {$"{ItemCount}".PadLeft(6)}" +
+                    $"\n   Max size: {$"{MaxSize}".PadLeft(6)}" +
+                    $"\n Max weight: {$"{MaxWeight}".PadLeft(6)}";
+            }
+        }
 
         public Task(string fileName)
         {
@@ -36,6 +46,7 @@ namespace ML1
 
             PopulateItems(itemCount);
         }
+
 
         protected void PopulateItems(int itemCount)
         {
