@@ -10,6 +10,7 @@ namespace ML1
     {
         public int[,] Items { get; protected set; }
 
+        public int BestPossibleScore { get; protected set; }
         public int ItemCount
         {
             get
@@ -43,16 +44,17 @@ namespace ML1
         {
             MaxSize = maxSize;
             MaxWeight = maxWeight;
-
+            BestPossibleScore = MaxSize + MaxWeight;
             PopulateItems(itemCount);
         }
 
 
         protected void PopulateItems(int itemCount)
         {
-            Items = new int[itemCount, 2];
+            Items = new int[itemCount, 3];
             int maxPackageSize = MaxSize * 10 / itemCount;
             int maxPackageWeight = MaxWeight * 10 / itemCount;
+            int maxPackagePrice = itemCount;
             int totalSize;
             int totalWeight;
             do
@@ -63,9 +65,8 @@ namespace ML1
                 {
                     totalSize += (Items[i, 0] = Misc.GetInt(maxPackageSize));
                     totalWeight += (Items[i, 1] = Misc.GetInt(maxPackageWeight));
+                    totalWeight += (Items[i, 2] = Misc.GetInt(maxPackagePrice));
                 }
-                if (totalSize <= maxPackageSize || totalWeight <= maxPackageWeight)
-                    Console.WriteLine("ERR");
             } while (totalSize <= maxPackageSize || totalWeight <= maxPackageWeight);
         }
 
@@ -120,6 +121,7 @@ namespace ML1
                         throw new InvalidDataException($"Line {i + 1} MaxWeight: {splitted[1]}");
                 }
             }
+            BestPossibleScore = MaxSize + MaxWeight;
         }
     }
 }

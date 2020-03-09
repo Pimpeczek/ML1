@@ -31,7 +31,21 @@ namespace ML1
 
 
         public int BaseRouletteChance = 1;
-        public int TournamentSize = 32;
+        int tournamentSize = 32;
+        public int TournamentSize
+        {
+            get
+            {
+                return tournamentSize;
+            }
+            set
+            {
+                if (value > Individuals.Length)
+                    tournamentSize = Individuals.Length;
+                else
+                    tournamentSize = value;
+            }
+        }
         protected Task task;
         public Task Task
         {
@@ -79,13 +93,13 @@ namespace ML1
 
             for (int i = itemCount - 1; i >= 0; i--)
             {
-                arr[i] = rng.Next(6) == 0;
+                arr[i] = rng.Next(5) <2;
             }
 
             return arr;
         }
 
-        protected (int, int) GetSizeAndWeight(int individualID)
+        protected (int, int, int) GetData(int individualID)
         {
             if (task == null)
                 throw new ArgumentNullException("Task");
@@ -97,26 +111,30 @@ namespace ML1
 
             int totalSize = 0;
             int totalWeight = 0;
-
+            int totalPrice = 0;
             for (int i = itemCount - 1; i >= 0; i--)
             {
                 if (individual[i])
                 {
                     totalSize += task.Items[i, 0];
                     totalWeight += task.Items[i, 1];
+                    totalPrice += task.Items[i, 2];
                 }
             }
-            return (totalSize, totalWeight);
+            return (totalSize, totalWeight, totalPrice);
         }
 
         public int Evaluate(int individualID)
         {
-            (int, int) data = GetSizeAndWeight(individualID);
+            (int, int, int) data = GetData(individualID);
 
             if (data.Item1 > task.MaxSize || data.Item2 > task.MaxWeight)
-                return 0;
+            {
+                //return 0;
+                return task.MaxSize - data.Item1 + task.MaxWeight - data.Item2;
+            }       
 
-            return data.Item1 + data.Item2;
+            return data.Item3;
         }
 
         public int EvaluateBest()
@@ -211,13 +229,46 @@ namespace ML1
             return bestId;
         }
 
-        public void Tournament()
+        public int Tournament()
         {
             bool[][] newPopulation = new bool[Individuals.Length][];
+            int[] fitnesses = new int[Individuals.Length];
+            int parent1;
+            int parent2;
+            int fitness1;
+            int fitness2;
+            int tempFitness;
+            int tempParent;
+            int bestFitness = Individuals.Length - 1;
             for (int i = Individuals.Length - 1; i >= 0; i--)
             {
-                newPopulation[i] = Mutate(Crossover(SingleTournament(), SingleTournament()));
+                fitnesses[i] = Evaluate(i);
+                
+
             }
+            for (int i = Individuals.Length - 1; i >= 0; i--)
+            {
+                parent1 = 0;
+                parent2 = 0;
+                fitness1 = -1000;
+                fitness2 = -1000;
+                for (int t = TournamentSize; t > 0; t--)
+                {
+                    if (fitnesses[tempParent = rng.Next(fitnesses.Length)] >= fitnesses[parent1])
+                    {
+                        parent1 = tempParent;
+                    }
+
+                    if (fitnesses[tempParent = rng.Next(fitnesses.Length)] >= fitnesses[parent2])
+                    {
+                        parent2 = tempParent;
+                    }
+
+                }
+                newPopulation[i] = Mutate(Crossover(parent1, parent2));
+            }
+            Individuals = newPopulation;
+            return EvaluateBest();
         }
 
         public void Roulette()
@@ -279,7 +330,7 @@ namespace ML1
 
         public int BestID()
         {
-            int bestFitness = 0;
+            int bestFitness = int.MinValue;
             int bestId = 0;
             int tempFitness;
             for (int i = Individuals.Length - 1; i >= 0; i--)
