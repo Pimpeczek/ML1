@@ -11,25 +11,18 @@ namespace ML1
     {
         static void Main(string[] args)
         {
+            Console.WriteLine("[1] - nutation tests\n[2] - crossover tests\n[3] - tournament tests\n[3] - population tests");
             ConsoleKey key = Console.ReadKey(true).Key;
-
-            if(key == ConsoleKey.D1)
-            Calculate(MakePopMut, "mut_graph.png", 0);
+            if (key == ConsoleKey.D1)
+                Calculate(MakePopMut, "mut_graph.png", 0);
             if (key == ConsoleKey.D2)
                 Calculate(MakePopCrs, "crs_graph.png", 1);
             if (key == ConsoleKey.D3)
                 Calculate(MakePopTur, "tur_graph.png", 2);
             if (key == ConsoleKey.D4)
                 Calculate(MakePopPop, "pop_graph.png", 3);
-            Thread[] threads = new Thread[4];
-            //threads[0] = new Thread(() => Calculate(MakePopMut, "mut_graph.png", 0));
-            //threads[1] = new Thread(() => Calculate(MakePopCrs, "crs_graph.png", 1));
-            //threads[2] = new Thread(() => Calculate(MakePopTur, "tur_graph.png", 2));
-            //threads[3] = new Thread(() => Calculate(MakePopPop, "pop_graph.png", 3));
-            //threads[0].Start();
-            //threads[1].Start();
-            //threads[2].Start();
-            //threads[3].Start();
+
+            Console.WriteLine("\n  - DONE! -");
             Console.ReadKey(true);
         }
 
@@ -40,13 +33,14 @@ namespace ML1
             Task[] tasks;
             int temp;
             
-            int popSize = 100;
             int groupSize = 8;
             int taskCount = 8;
             int[] pointBestPrice = new int[taskCount];
             int bestPrice;
+            int[] pointWorstPrice = new int[taskCount];
+            int worstPrice;
             int generationCount = 100;
-            int[] dims = { 100, generationCount };
+            int[] dims = { 10, generationCount };
             int[] tileSize = { 10, 10 };
             int[] imageSize = { tileSize[0] * dims[0], tileSize[1] * dims[1] };
             int maxAverageScore = 0;
@@ -59,10 +53,12 @@ namespace ML1
             Bitmap bmp = new Bitmap(imageSize[0], imageSize[1]);
             Graphics graph = Graphics.FromImage(bmp);
             SolidBrush[] brushes = new SolidBrush[256];
+            SolidBrush[] badBrushes = new SolidBrush[256];
             int[,] data1 = new int[dims[0], dims[1]];
             for (int br = 0; br < 256; br++)
             {
                 brushes[br] = new SolidBrush(Color.FromArgb(br, br, br));
+                badBrushes[br] = new SolidBrush(Color.FromArgb(br, 0, 0));
             }
 
             for (int i = 0; i < taskCount; i++)
@@ -72,8 +68,6 @@ namespace ML1
             }
 
             stopwatch.Restart();
-            Console.Write(  $"[0/{dims[1]}]\n" +
-                            $"[0/{dims[0]}]");
             for (int m = 0; m < dims[0]; m++)
             {
                 for (int t = 0; t < taskCount; t++)
@@ -95,22 +89,17 @@ namespace ML1
                             averageScore += temp;
                             if (pointBestPrice[t] < temp)
                                 pointBestPrice[t] = temp;
+                            if (pointWorstPrice[t] > temp)
+                                pointWorstPrice[t] = temp;
 
                         }
-                        //Console.SetCursorPosition(0, 0);
-                        //Console.Write($"[{t}/{taskCount}]  ");
 
                     }
                     averageScore /= populationsCount;
-                    if (averageScore < 0)
-                        averageScore = 0;
-                    //Console.SetCursorPosition(0, 0);
-                    //Console.Write($"{averageScore}  ");
                     data1[m, gr] = averageScore;
-                    //graph.FillRectangle(brushes[averageScore * 255 / maxAverageScore], m * tileSize[0], gr * tileSize[1], tileSize[0], tileSize[1]);
                     if (updateTime + 200 < stopwatch.ElapsedMilliseconds)
                     {
-                        Console.WriteLine($"{name} : [{gr + 1}/{dims[1]}]  [{m + 1}/{dims[0]}]");
+                        Console.WriteLine($"{name} : generation [{gr + 1}/{dims[1]}] | test no. [{m + 1}/{dims[0]}]");
                         updateTime = (int)stopwatch.ElapsedMilliseconds;
                     }
 
@@ -118,16 +107,25 @@ namespace ML1
 
             }
             bestPrice = 0;
+            worstPrice = 0;
             for(int i = 0; i < taskCount; i++)
             {
                 bestPrice += pointBestPrice[i];
+                worstPrice += pointWorstPrice[i];
             }
             bestPrice /= taskCount;
             for (int m = 0; m < dims[0]; m++)
             {
                 for (int gr = 0; gr < dims[1]; gr++)
                 {
-                    graph.FillRectangle(brushes[data1[m, gr] * 255 / (bestPrice + 1)], m * tileSize[0], gr * tileSize[1], tileSize[0], tileSize[1]);
+                    if (data1[m, gr] < 0)
+                    {
+                        graph.FillRectangle(badBrushes[data1[m, gr] * 255 / (worstPrice + 1)], m * tileSize[0], gr * tileSize[1], tileSize[0], tileSize[1]);
+                    }
+                    else
+                    {
+                        graph.FillRectangle(brushes[data1[m, gr] * 255 / (bestPrice + 1)], m * tileSize[0], gr * tileSize[1], tileSize[0], tileSize[1]);
+                    }
                 }
             }
             graph.Save();
